@@ -34,7 +34,6 @@ def load_numbers_from_file(file_path, num_rows):
                     characters.append((i + 1, character, meaning))  # i+1 to make character number start from 1
     except Exception as e:
         st.error(f"An error occurred while reading the file: {e}")
-    print(len(characters))
     return characters
 
 # Load previously selected numbers and their scores from the file (as a dictionary)
@@ -133,8 +132,17 @@ def main():
         st.session_state.selected = None
     if 'meaning' not in st.session_state:
         st.session_state.meaning = None
+    if 'quiz_direction' not in st.session_state:
+        st.session_state.quiz_direction = "Japanese → English"
 
     st.title("Japanese Character Quiz")
+
+    # Language selection option
+    st.session_state.quiz_direction = st.radio(
+        "Select Quiz Direction:",
+        ("Japanese → English", "English → Japanese"),
+        index=0  # Default to Japanese → English
+    )
 
     # Reset button at the top
     if st.button("Reset Progress"):
@@ -177,11 +185,15 @@ def main():
             meaning = next((m for _, c, m in st.session_state.available_characters if c == char), "No meaning found")
             st.sidebar.write(f"{char}: {meaning}")
 
-    # Show the selected character and actions
+    # Show the selected character or meaning based on the quiz direction
     if st.session_state.selected:
         char_number, char = st.session_state.selected
         meaning = st.session_state.meaning
-        st.subheader(f"Character ({char_number}): {char}")
+
+        if st.session_state.quiz_direction == "Japanese → English":
+            st.subheader(f"Character ({char_number}): {char}")
+        else:
+            st.subheader(f"Meaning ({char_number}): {meaning}")
 
         # Buttons for correct and incorrect
         col1, col2 = st.columns(2)
@@ -202,22 +214,29 @@ def main():
             save_selected_numbers(json_file_path, st.session_state.selected_numbers)
             update_character()  # Update the character immediately
 
-        # Show the meaning after guessing
-        st.markdown(f"<details><summary style='cursor: pointer;'>Show Meaning</summary><p>{meaning}</p></details>", unsafe_allow_html=True)
+        # Show the meaning after user interaction
+        if st.session_state.quiz_direction == "Japanese → English":
+            with st.expander("Show Meaning"):
+                st.write(meaning)
+        else:
+            with st.expander("Show Character"):
+                st.write(char)
 
-    # Align download buttons to the lower right corner
-    col1, col2, col3 = st.columns([6, 4, 2])
-    with col3:
+    # Download buttons for CSV and PDF exports
+    col1, col2 = st.columns(2)
+    with col1:
+        csv_data = generate_csv()
         st.download_button(
             label="Download as CSV",
-            data=generate_csv(),
-            file_name='japanese_characters.csv',
+            data=csv_data,
+            file_name="japanese_characters.csv",
             mime='text/csv'
         )
-
+    with col2:
+        pdf_data = generate_pdf()
         st.download_button(
             label="Download as PDF",
-            data=generate_pdf(),
+            data=pdf_data,
             file_name="japanese_characters.pdf",
             mime="application/pdf"
         )
