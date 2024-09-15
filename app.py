@@ -154,17 +154,20 @@ def main():
     st.sidebar.header("Progress")
     total_characters = len(st.session_state.available_characters)
     shown_characters = len(st.session_state.selected_numbers)
-    
+
     # Fix the division by zero issue
     if total_characters > 0:
         progress_percentage = min(shown_characters / total_characters, 1.0)
     else:
         progress_percentage = 0  # Avoid division by zero
 
+    # Display the progress with character counter
     st.sidebar.progress(progress_percentage)
+    st.sidebar.write(f"Progress: {shown_characters} / {total_characters} ({round(progress_percentage * 100, 2)}%)")
 
     score_percentage = calculate_score(st.session_state.selected_numbers)
     st.sidebar.write(f"Score: {score_percentage}% correct")
+
     
     # Display incorrect characters and their meanings
     incorrect_characters = [char for char, score in st.session_state.selected_numbers.items() if score == 0]
