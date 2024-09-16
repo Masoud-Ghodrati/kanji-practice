@@ -12,10 +12,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-# Define the file paths
 txt_file_path = "numbers.txt"  # Path to your text file
-json_file_path = "selected_numbers.json"  # Path to store selected numbers and scores
+# Define the file paths
+json_file_path_english_to_japanese = "selected_numbers_english_to_japanese.json"
+json_file_path_japanese_to_english = "selected_numbers_japanese_to_english.json"
 
 # Load the list of Japanese characters and their meanings from the text file
 def load_numbers_from_file(file_path, num_rows):
@@ -37,7 +37,8 @@ def load_numbers_from_file(file_path, num_rows):
     return characters
 
 # Load previously selected numbers and their scores from the file (as a dictionary)
-def load_selected_numbers(file_name):
+def load_selected_numbers(direction):
+    file_name = json_file_path_english_to_japanese if direction == "English → Japanese" else json_file_path_japanese_to_english
     if os.path.exists(file_name):
         with open(file_name, "r") as file:
             selected_numbers = json.load(file)
@@ -46,7 +47,8 @@ def load_selected_numbers(file_name):
     return selected_numbers
 
 # Save the selected numbers and their scores back to the file
-def save_selected_numbers(file_name, selected_numbers):
+def save_selected_numbers(direction, selected_numbers):
+    file_name = json_file_path_english_to_japanese if direction == "English → Japanese" else json_file_path_japanese_to_english
     with open(file_name, "w") as file:
         json.dump(selected_numbers, file)
 
@@ -81,7 +83,7 @@ def reset_progress():
     st.session_state.selected_numbers = {}
     st.session_state.show_character_input = True  # Show character input after reset
     st.session_state.available_characters = []  # Clear available characters
-    save_selected_numbers(json_file_path, st.session_state.selected_numbers)
+    save_selected_numbers(st.session_state.quiz_direction, st.session_state.selected_numbers)
 
 # Generate CSV for download
 def generate_csv():
@@ -96,13 +98,9 @@ def generate_csv():
 # Generate PDF for download
 def generate_pdf():
     buffer = BytesIO()
-
     pdf = canvas.Canvas(buffer, pagesize=letter)
-    pdfmetrics.registerFont(TTFont("Noto Sans JP Thin","NOTOSANSJP-THIN.TTF"))
-
+    pdfmetrics.registerFont(TTFont("Noto Sans JP Thin", "NOTOSANSJP-THIN.TTF"))
     pdf.setFont("Noto Sans JP Thin", 14)
-
-    # Header
     pdf.drawString(100, 750, "Japanese Characters and Meanings")
     
     y_position = 720
@@ -151,10 +149,9 @@ def main():
 
     # Show the character input only after reset
     if st.session_state.show_character_input:
-    
         num_chars = st.number_input("Select number of characters", min_value=1, max_value=2200, value=2200)
         st.session_state.available_characters = load_numbers_from_file(txt_file_path, num_chars)
-        st.session_state.selected_numbers = load_selected_numbers(json_file_path)
+        st.session_state.selected_numbers = load_selected_numbers(st.session_state.quiz_direction)
         update_character()  # Initialize the first character
         st.session_state.show_character_input = True  # Hide the input once it's used
 
@@ -176,7 +173,6 @@ def main():
     score_percentage = calculate_score(st.session_state.selected_numbers)
     st.sidebar.write(f"Score: {score_percentage}% correct")
 
-    
     # Display incorrect characters and their meanings
     incorrect_characters = [char for char, score in st.session_state.selected_numbers.items() if score == 0]
     if incorrect_characters:
@@ -206,12 +202,12 @@ def main():
         # Handle button clicks
         if correct_clicked:
             st.session_state.selected_numbers[char] = 1  # Mark as correct (1)
-            save_selected_numbers(json_file_path, st.session_state.selected_numbers)
+            save_selected_numbers(st.session_state.quiz_direction, st.session_state.selected_numbers)
             update_character()  # Update the character immediately
         
         if incorrect_clicked:
             st.session_state.selected_numbers[char] = 0  # Mark as incorrect (0)
-            save_selected_numbers(json_file_path, st.session_state.selected_numbers)
+            save_selected_numbers(st.session_state.quiz_direction, st.session_state.selected_numbers)
             update_character()  # Update the character immediately
 
         # Show the meaning after user interaction
