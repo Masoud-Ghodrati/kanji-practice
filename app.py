@@ -13,6 +13,7 @@ import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 txt_file_path = "japanese_characters.txt"  # Path to your text file
+
 # Define the file paths
 json_file_path_english_to_japanese = "selected_characters_english_to_japanese.json"
 json_file_path_japanese_to_english = "selected_characters_japanese_to_english.json"
