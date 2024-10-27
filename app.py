@@ -128,8 +128,6 @@ def main():
         st.session_state.selected_characters = {}
     if 'show_character_input' not in st.session_state:
         st.session_state.show_character_input = True
-    if 'selected' not in st.session_state:
-        st.session_state.selected = None
     if 'meaning' not in st.session_state:
         st.session_state.meaning = None
     if 'quiz_direction' not in st.session_state:
@@ -154,39 +152,40 @@ def main():
        
         num_chars = st.number_input("Select number of characters", min_value=1, max_value=2200, value=2200)
         st.session_state.available_characters = load_numbers_from_file(txt_file_path, num_chars)
-        st.session_state.selected_characters = load_selected_characters(st.session_state.quiz_direction)
-        update_character()  # Initialize the first character
-        st.session_state.show_character_input = True  # Hide the input once it's used
+        st.session_state.selected_characters = load_selected_characters(st.session_state.quiz_direction) 
 
     # Show the selected character or meaning based on the quiz direction
+    if 'selected' not in st.session_state:
+        update_character()  # Initialize the first character
+
     if st.session_state.selected:
+        # Buttons for correct and incorrect
         char_number, char = st.session_state.selected
-        print(char)
         meaning = st.session_state.meaning
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("Correct"):
+                st.session_state.selected_characters[char] = 1  # Mark as correct (1)
+                save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters)
+                update_character()  # Update the character immediately
+                char_number, char = st.session_state.selected
+                meaning = st.session_state.meaning
+
+        with col2:
+            if st.button("Incorrect"):
+                st.session_state.selected_characters[char] = 0  # Mark as incorrect (0)
+                save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters)
+                update_character()  # Update the character immediately
+                char_number, char = st.session_state.selected
+                meaning = st.session_state.meaning
 
         if st.session_state.quiz_direction == "Japanese → English":
             st.subheader(f"Character ({char_number}): {char}")
         else:
             st.subheader(f"Meaning ({char_number}): {meaning}")
 
-        # Buttons for correct and incorrect
-        col1, col2 = st.columns(2)
-        with col1:
-            correct_clicked = st.button("Correct")
-
-        with col2:
-            incorrect_clicked = st.button("Incorrect")
-     
-        # Handle button clicks
-        if correct_clicked:
-            st.session_state.selected_characters[char] = 1  # Mark as correct (1)
-            save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters)
-            update_character()  # Update the character immediately
-        
-        if incorrect_clicked:
-            st.session_state.selected_characters[char] = 0  # Mark as incorrect (0)
-            save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters)
-            update_character()  # Update the character immediately
+        print(char_number, char, meaning)
         
         # Show the meaning after user interaction
         if st.session_state.quiz_direction == "Japanese → English":
@@ -220,8 +219,6 @@ def main():
         for char in incorrect_characters:
             meaning = next((m for _, c, m in st.session_state.available_characters if c == char), "No meaning found")
             st.sidebar.write(f"{char}: {meaning}")
-
-
 
     # Download buttons for CSV and PDF exports
     col1, col2 = st.columns(2)
