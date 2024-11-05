@@ -160,6 +160,11 @@ def main():
         st.session_state.num_chars = load_num_rounds()
 
     st.title("Japanese Character Quiz")
+    
+    # Reset button at the top
+    if st.button("Reset Progress"):        
+        reset_progress()
+        st.success("Progress has been reset!")
 
     # Language selection option
     st.session_state.quiz_direction = st.radio(
@@ -168,10 +173,7 @@ def main():
         index=0  # Default to Japanese → English
     )
 
-    # Reset button at the top
-    if st.button("Reset Progress"):
-        reset_progress()
-        st.success("Progress has been reset!")
+
     
     # Input for number of rounds if not yet set
     if st.session_state.num_chars is None and not st.session_state.game_started:
