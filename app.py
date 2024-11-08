@@ -11,6 +11,10 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import warnings
 
+from login import LoginManager, login_page
+
+login_manager = LoginManager()
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 txt_file_path = "japanese_characters.txt"  # Path to your text file
 
@@ -22,14 +26,14 @@ json_file_path_japanese_to_english = "selected_characters_japanese_to_english.js
 NUM_ROUNDS_FILE = "num_rounds.txt"
 
 # Function to save num_rounds to a file
-def save_num_rounds(num_rounds):
-    with open(NUM_ROUNDS_FILE, "w") as f:
+def save_num_rounds(num_rounds, username):
+    with open(f"{username}-{NUM_ROUNDS_FILE}", "w") as f:
         f.write(str(num_rounds))
 
 # Function to load num_rounds from a file, if it exists
-def load_num_rounds():
-    if os.path.exists(NUM_ROUNDS_FILE):
-        with open(NUM_ROUNDS_FILE, "r") as f:
+def load_num_rounds(username):
+    if os.path.exists(f"{username}-{NUM_ROUNDS_FILE}"):
+        with open(f"{username}-{NUM_ROUNDS_FILE}", "r") as f:
             return int(f.read())
     return None
 
@@ -54,8 +58,8 @@ def load_numbers_from_file(file_path, num_rows):
     return characters
 
 # Load previously selected numbers and their scores from the file (as a dictionary)
-def load_selected_characters(direction):
-    file_name = json_file_path_english_to_japanese if direction == "English → Japanese" else json_file_path_japanese_to_english
+def load_selected_characters(direction, username):
+    file_name = f"{username}-{json_file_path_english_to_japanese}" if direction == "English → Japanese" else f"{username}-{json_file_path_japanese_to_english}"
     if os.path.exists(file_name):
         with open(file_name, "r") as file:
             selected_characters = json.load(file)
@@ -64,8 +68,8 @@ def load_selected_characters(direction):
     return selected_characters
 
 # Save the selected numbers and their scores back to the file
-def save_selected_characters(direction, selected_characters):
-    file_name = json_file_path_english_to_japanese if direction == "English → Japanese" else json_file_path_japanese_to_english
+def save_selected_characters(direction, selected_characters, username):
+    file_name = f"{username}-{json_file_path_english_to_japanese}" if direction == "English → Japanese" else f"{username}-{json_file_path_japanese_to_english}"
     print(selected_characters)
     with open(file_name, "w") as file:
         json.dump(selected_characters, file)
@@ -97,11 +101,11 @@ def update_character():
         st.session_state.meaning = meaning
 
 # Reset the app's progress and clear the history
-def reset_progress():
+def reset_progress(username):
     st.session_state.selected_characters = {}
     st.session_state.show_character_input = True  # Show character input after reset
     st.session_state.available_characters = []  # Clear available characters
-    save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters)
+    save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters, username)
     st.session_state.num_chars = None
     st.session_state.game_started = False
     if os.path.exists(NUM_ROUNDS_FILE):
@@ -140,7 +144,7 @@ def generate_pdf():
     return buffer
 
 # Streamlit app
-def main():
+def main(username):
     # Initialize session state variables if not already initialized
     if 'available_characters' not in st.session_state:
         st.session_state.available_characters = []
@@ -157,10 +161,10 @@ def main():
 
     # Load num_rounds from file if available, else initialize to None
     if 'num_chars' not in st.session_state:
-        st.session_state.num_chars = load_num_rounds()
+        st.session_state.num_chars = load_num_rounds(username=username)
 
-    st.title("Japanese Character Quiz")
-    
+    st.title(f"Japanese Character Quiz -Welcome {username}")
+
     # Reset button at the top
     if st.button("Reset Progress"):        
         reset_progress()
@@ -181,14 +185,14 @@ def main():
         if st.button("Start Game"):
             st.session_state.num_chars = num_chars
             st.session_state.game_started = True  # Set game as started
-            save_num_rounds(num_chars)  
+            save_num_rounds(num_chars, username=username)  
     else:
         # Show the character input only after reset
         if st.session_state.show_character_input:
             num_chars = st.session_state.num_chars
             # num_chars = st.number_input("Select number of characters", min_value=1, max_value=2200, value=2200)
             st.session_state.available_characters = load_numbers_from_file(txt_file_path, num_chars)
-            st.session_state.selected_characters = load_selected_characters(st.session_state.quiz_direction) 
+            st.session_state.selected_characters = load_selected_characters(st.session_state.quiz_direction, username=username) 
 
         # Show the selected character or meaning based on the quiz direction
         if 'selected' not in st.session_state:
@@ -203,7 +207,7 @@ def main():
             with col1:
                 if st.button("Correct"):
                     st.session_state.selected_characters[char] = 1  # Mark as correct (1)
-                    save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters)
+                    save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters, username=username)
                     update_character()  # Update the character immediately
                     char_number, char = st.session_state.selected
                     meaning = st.session_state.meaning
@@ -211,7 +215,7 @@ def main():
             with col2:
                 if st.button("Incorrect"):
                     st.session_state.selected_characters[char] = 0  # Mark as incorrect (0)
-                    save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters)
+                    save_selected_characters(st.session_state.quiz_direction, st.session_state.selected_characters, username=username)
                     update_character()  # Update the character immediately
                     char_number, char = st.session_state.selected
                     meaning = st.session_state.meaning
@@ -263,7 +267,7 @@ def main():
             st.download_button(
                 label="Download as CSV",
                 data=csv_data,
-                file_name="japanese_characters.csv",
+                file_name=f"{username}-japanese_characters.csv",
                 mime='text/csv'
             )
         with col2:
@@ -271,9 +275,14 @@ def main():
             st.download_button(
                 label="Download as PDF",
                 data=pdf_data,
-                file_name="japanese_characters.pdf",
+                file_name=f"{username}-japanese_characters.pdf",
                 mime="application/pdf"
             )
 
-if __name__ == "__main__":
-    main()
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if st.session_state.authenticated:
+    main(st.session_state.username)
+else:
+    login_page(login_manager)
