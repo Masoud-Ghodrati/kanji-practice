@@ -12,7 +12,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import warnings
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this to a secure secret key
+app.secret_key = os.environ.get('SECRET_KEY', 'fallback-secret-key-change-in-production')
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
