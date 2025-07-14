@@ -3,8 +3,8 @@ import random
 import json
 import os
 import re
-import pandas as pd
-from io import BytesIO
+import csv
+from io import BytesIO, StringIO
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
@@ -240,19 +240,19 @@ def download_csv():
     selected_characters = session.get('selected_characters', {})
     username = session['username']
     
-    data = []
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Character Number", "Character", "Meaning", "Status"])
+    
     for char_number, char, meaning in available_characters:
         if char in selected_characters:
             status = "Correct" if selected_characters[char] == 1 else "Incorrect"
-            data.append([char_number, char, meaning, status])
+            writer.writerow([char_number, char, meaning, status])
     
-    df = pd.DataFrame(data, columns=["Character Number", "Character", "Meaning", "Status"])
+    csv_data = output.getvalue().encode('utf-8')
+    output.close()
     
-    output = BytesIO()
-    df.to_csv(output, index=False, encoding='utf-8')
-    output.seek(0)
-    
-    return send_file(output, as_attachment=True, download_name=f"{username}-japanese_characters.csv", mimetype='text/csv')
+    return send_file(BytesIO(csv_data), as_attachment=True, download_name=f"{username}-japanese_characters.csv", mimetype='text/csv')
 
 @app.route('/download_pdf')
 def download_pdf():
