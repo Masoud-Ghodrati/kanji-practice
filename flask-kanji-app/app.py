@@ -155,7 +155,7 @@ def answer():
     return jsonify({'success': True, 'character': character})
 
 @app.route('/get_progress')
-def get_progress():
+def get_progress_route():
     if 'username' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
@@ -202,12 +202,13 @@ def undo_answer():
     return jsonify({'success': False, 'message': 'Character not found'})
 
 @app.route('/get_user_settings')
-def get_user_settings():
+def get_user_settings_route():
     if 'username' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
     username = session['username']
-    saved_num_chars = get_user_settings(username)
+    from database import get_user_settings as db_get_user_settings
+    saved_num_chars = db_get_user_settings(username)
     
     return jsonify({
         'username': username,
@@ -215,7 +216,7 @@ def get_user_settings():
     })
 
 @app.route('/reset_progress', methods=['POST'])
-def reset_progress():
+def reset_progress_route():
     if 'username' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
@@ -223,7 +224,8 @@ def reset_progress():
     direction = session.get('quiz_direction', 'Japanese → English')
     
     session['selected_characters'] = {}
-    reset_progress(username, direction)
+    from database import reset_progress as db_reset_progress
+    db_reset_progress(username, direction)
     
     return jsonify({'success': True})
 
