@@ -7,38 +7,18 @@ import csv
 from io import BytesIO, StringIO
 # PDF functionality temporarily disabled
 import warnings
+from database import init_db, create_user, authenticate_user, get_user_settings, save_user_settings, get_progress, save_progress, delete_progress_item, reset_progress, get_user_stats
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'fallback-secret-key-change-in-production')
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+# Initialize database
+init_db()
+
 # Configuration
 TXT_FILE_PATH = "japanese_characters.txt"
-JSON_FILE_PATH_EN_TO_JP = "selected_characters_english_to_japanese.json"
-JSON_FILE_PATH_JP_TO_EN = "selected_characters_japanese_to_english.json"
-NUM_ROUNDS_FILE = "num_rounds.txt"
-USERS_FILE = "users.json"
-
-def load_users():
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-def save_users(users):
-    with open(USERS_FILE, 'w') as f:
-        json.dump(users, f)
-
-def save_num_rounds(num_rounds, username):
-    with open(f"{username}-{NUM_ROUNDS_FILE}", "w") as f:
-        f.write(str(num_rounds))
-
-def load_num_rounds(username):
-    if os.path.exists(f"{username}-{NUM_ROUNDS_FILE}"):
-        with open(f"{username}-{NUM_ROUNDS_FILE}", "r") as f:
-            return int(f.read())
-    return None
 
 def load_numbers_from_file(file_path, num_rows):
     characters = []
@@ -56,17 +36,7 @@ def load_numbers_from_file(file_path, num_rows):
         print(f"Error reading file: {e}")
     return characters
 
-def load_selected_characters(direction, username):
-    file_name = f"{username}-{JSON_FILE_PATH_EN_TO_JP}" if direction == "English → Japanese" else f"{username}-{JSON_FILE_PATH_JP_TO_EN}"
-    if os.path.exists(file_name):
-        with open(file_name, "r") as file:
-            return json.load(file)
-    return {}
 
-def save_selected_characters(direction, selected_characters, username):
-    file_name = f"{username}-{JSON_FILE_PATH_EN_TO_JP}" if direction == "English → Japanese" else f"{username}-{JSON_FILE_PATH_JP_TO_EN}"
-    with open(file_name, "w") as file:
-        json.dump(selected_characters, file)
 
 def select_random_character(available_characters, selected_characters):
     remaining_characters = [char for _, char, _ in available_characters if char not in selected_characters]
@@ -94,8 +64,7 @@ def login():
         username = data.get('username')
         password = data.get('password')
         
-        users = load_users()
-        if username in users and users[username] == password:
+        if authenticate_user(username, password):
             session['username'] = username
             return jsonify({'success': True})
         return jsonify({'success': False, 'message': 'Invalid credentials'})
@@ -109,13 +78,9 @@ def register():
         username = data.get('username')
         password = data.get('password')
         
-        users = load_users()
-        if username in users:
-            return jsonify({'success': False, 'message': 'Username already exists'})
-        
-        users[username] = password
-        save_users(users)
-        return jsonify({'success': True})
+        if create_user(username, password):
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'message': 'Username already exists'})
     
     return render_template('register.html')
 
@@ -133,14 +98,14 @@ def start_game():
     username = session['username']
     
     # Load saved num_chars or use provided/default
-    saved_num_chars = load_num_rounds(username)
-    num_chars = data.get('num_chars', saved_num_chars or 2200)
+    saved_num_chars = get_user_settings(username)
+    num_chars = data.get('num_chars', saved_num_chars)
     direction = data.get('direction', 'Japanese → English')
     
-    save_num_rounds(num_chars, username)
+    save_user_settings(username, num_chars)
     
     available_characters = load_numbers_from_file(TXT_FILE_PATH, num_chars)
-    selected_characters = load_selected_characters(direction, username)
+    selected_characters = get_progress(username, direction)
     
     session['available_characters'] = available_characters
     session['selected_characters'] = selected_characters
@@ -180,11 +145,12 @@ def answer():
     is_correct = data.get('is_correct')
     
     username = session['username']
+    direction = session.get('quiz_direction')
     selected_characters = session.get('selected_characters', {})
     selected_characters[character] = 1 if is_correct else 0
     session['selected_characters'] = selected_characters
     
-    save_selected_characters(session.get('quiz_direction'), selected_characters, username)
+    save_progress(username, character, direction, 1 if is_correct else 0)
     
     return jsonify({'success': True, 'character': character})
 
@@ -224,12 +190,13 @@ def undo_answer():
     character = data.get('character')
     
     username = session['username']
+    direction = session.get('quiz_direction')
     selected_characters = session.get('selected_characters', {})
     
     if character in selected_characters:
         del selected_characters[character]
         session['selected_characters'] = selected_characters
-        save_selected_characters(session.get('quiz_direction'), selected_characters, username)
+        delete_progress_item(username, character, direction)
         return jsonify({'success': True})
     
     return jsonify({'success': False, 'message': 'Character not found'})
@@ -240,7 +207,7 @@ def get_user_settings():
         return jsonify({'error': 'Not authenticated'}), 401
     
     username = session['username']
-    saved_num_chars = load_num_rounds(username)
+    saved_num_chars = get_user_settings(username)
     
     return jsonify({
         'username': username,
@@ -256,7 +223,7 @@ def reset_progress():
     direction = session.get('quiz_direction', 'Japanese → English')
     
     session['selected_characters'] = {}
-    save_selected_characters(direction, {}, username)
+    reset_progress(username, direction)
     
     return jsonify({'success': True})
 
@@ -286,6 +253,21 @@ def download_csv():
 @app.route('/download_pdf')
 def download_pdf():
     return jsonify({'error': 'PDF download temporarily disabled'}), 503
+
+@app.route('/stats')
+def stats():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    return render_template('stats.html')
+
+@app.route('/api/stats')
+def api_stats():
+    if 'username' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    username = session['username']
+    stats = get_user_stats(username)
+    return jsonify(stats)
 
 if __name__ == '__main__':
     import os
