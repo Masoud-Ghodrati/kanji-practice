@@ -5,7 +5,18 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2><i class="fas fa-chart-bar"></i> Performance Statistics</h2>
-            <a href="/" class="btn btn-primary">Back to Quiz</a>
+            <div>
+                <select id="directionFilter" class="form-select d-inline-block me-2" style="width: auto;">
+                    <option value="">All Directions</option>
+                    <option value="Japanese → English">Japanese → English</option>
+                    <option value="English → Japanese">English → Japanese</option>
+                </select>
+                <select id="sessionFilter" class="form-select d-inline-block me-2" style="width: auto;">
+                    <option value="">All Time</option>
+                    <option value="current">Current Session</option>
+                </select>
+                <a href="/" class="btn btn-primary">Back to Quiz</a>
+            </div>
         </div>
     </div>
 </div>
@@ -27,9 +38,39 @@
             </div>
         </div>
     </div>
+    
+    <!-- Timing Stats -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Response Times</h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="h4 text-success" id="avgCorrectTime">0s</div>
+                        <small class="text-muted">Avg Correct</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h4 text-danger" id="avgIncorrectTime">0s</div>
+                        <small class="text-muted">Avg Incorrect</small>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="small">Fastest: <span id="fastestTime">0s</span></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="small">Slowest: <span id="slowestTime">0s</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Direction Breakdown -->
-    <div class="col-md-8 mb-4">
+    <div class="col-md-4 mb-4" id="directionCard">
         <div class="card shadow">
             <div class="card-header bg-info text-white">
                 <h5 class="mb-0">Performance by Direction</h5>
@@ -57,14 +98,26 @@
 </div>
 
 <div class="row">
-    <!-- Progress Chart -->
-    <div class="col-12">
+    <!-- Accuracy Chart -->
+    <div class="col-md-6 mb-4">
         <div class="card shadow">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0">Recent Progress (Last 7 Days)</h5>
+                <h5 class="mb-0">Accuracy Trends (Last 7 Days)</h5>
             </div>
             <div class="card-body">
-                <canvas id="progressChart" width="400" height="100"></canvas>
+                <canvas id="accuracyChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Timing Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Response Time Trends (Last 7 Days)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="timingChart" width="400" height="200"></canvas>
             </div>
         </div>
     </div>
@@ -76,13 +129,27 @@
 <script>
 class StatsPage {
     constructor() {
-        this.chart = null;
+        this.accuracyChart = null;
+        this.timingChart = null;
+        this.bindEvents();
         this.loadStats();
+    }
+    
+    bindEvents() {
+        document.getElementById('directionFilter').addEventListener('change', () => this.loadStats());
+        document.getElementById('sessionFilter').addEventListener('change', () => this.loadStats());
     }
 
     async loadStats() {
         try {
-            const response = await fetch('/api/stats');
+            const direction = document.getElementById('directionFilter').value;
+            const session = document.getElementById('sessionFilter').value;
+            
+            let url = '/api/stats?';
+            if (direction) url += `direction=${encodeURIComponent(direction)}&`;
+            if (session) url += `session_id=${session}&`;
+            
+            const response = await fetch(url);
             const stats = await response.json();
             this.displayStats(stats);
         } catch (error) {
@@ -95,33 +162,46 @@ class StatsPage {
         document.getElementById('overallPercentage').textContent = stats.overall_percentage + '%';
         document.getElementById('totalCorrect').textContent = stats.total_correct;
         document.getElementById('totalAnswered').textContent = stats.total_answered;
+        
+        // Timing stats
+        document.getElementById('avgCorrectTime').textContent = (stats.avg_correct_time / 1000).toFixed(1) + 's';
+        document.getElementById('avgIncorrectTime').textContent = (stats.avg_incorrect_time / 1000).toFixed(1) + 's';
+        document.getElementById('fastestTime').textContent = (stats.fastest_time / 1000).toFixed(1) + 's';
+        document.getElementById('slowestTime').textContent = (stats.slowest_time / 1000).toFixed(1) + 's';
 
-        // Direction breakdown
-        const jpToEn = stats.jp_to_en;
-        const enToJp = stats.en_to_jp;
+        // Direction breakdown (only show if not filtered)
+        const directionCard = document.getElementById('directionCard');
+        if (stats.jp_to_en !== undefined && stats.en_to_jp !== undefined) {
+            directionCard.style.display = 'block';
+            const jpToEn = stats.jp_to_en;
+            const enToJp = stats.en_to_jp;
 
-        document.getElementById('jpToEnBar').style.width = jpToEn.percentage + '%';
-        document.getElementById('jpToEnStats').textContent = `${jpToEn.correct}/${jpToEn.total} (${jpToEn.percentage}%)`;
+            document.getElementById('jpToEnBar').style.width = jpToEn.percentage + '%';
+            document.getElementById('jpToEnStats').textContent = `${jpToEn.correct}/${jpToEn.total} (${jpToEn.percentage}%)`;
 
-        document.getElementById('enToJpBar').style.width = enToJp.percentage + '%';
-        document.getElementById('enToJpStats').textContent = `${enToJp.correct}/${enToJp.total} (${enToJp.percentage}%)`;
+            document.getElementById('enToJpBar').style.width = enToJp.percentage + '%';
+            document.getElementById('enToJpStats').textContent = `${enToJp.correct}/${enToJp.total} (${enToJp.percentage}%)`;
+        } else {
+            directionCard.style.display = 'none';
+        }
 
-        // Progress chart
-        this.createChart(stats.recent_progress);
+        // Create charts
+        this.createAccuracyChart(stats.recent_progress);
+        this.createTimingChart(stats.recent_progress);
     }
 
-    createChart(recentProgress) {
-        const ctx = document.getElementById('progressChart').getContext('2d');
+    createAccuracyChart(recentProgress) {
+        const ctx = document.getElementById('accuracyChart').getContext('2d');
         
-        if (this.chart) {
-            this.chart.destroy();
+        if (this.accuracyChart) {
+            this.accuracyChart.destroy();
         }
 
         const labels = recentProgress.map(item => item.date);
         const percentages = recentProgress.map(item => item.percentage);
         const totals = recentProgress.map(item => item.total);
 
-        this.chart = new Chart(ctx, {
+        this.accuracyChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
@@ -130,12 +210,13 @@ class StatsPage {
                     data: percentages,
                     borderColor: 'rgb(75, 192, 192)',
                     backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    tension: 0.1
+                    tension: 0.1,
+                    fill: true
                 }, {
                     label: 'Questions Answered',
                     data: totals,
-                    borderColor: 'rgb(255, 99, 132)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
                     yAxisID: 'y1',
                     tension: 0.1
                 }]
@@ -162,7 +243,53 @@ class StatsPage {
                         },
                         grid: {
                             drawOnChartArea: false,
-                        },
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    createTimingChart(recentProgress) {
+        const ctx = document.getElementById('timingChart').getContext('2d');
+        
+        if (this.timingChart) {
+            this.timingChart.destroy();
+        }
+
+        const labels = recentProgress.map(item => item.date);
+        const correctTimes = recentProgress.map(item => (item.avg_correct_time || 0) / 1000);
+        const incorrectTimes = recentProgress.map(item => (item.avg_incorrect_time || 0) / 1000);
+
+        this.timingChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Correct Answers (s)',
+                    data: correctTimes,
+                    borderColor: 'rgb(34, 197, 94)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                    tension: 0.1,
+                    fill: false
+                }, {
+                    label: 'Incorrect Answers (s)',
+                    data: incorrectTimes,
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    tension: 0.1,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Response Time (seconds)'
+                        }
                     }
                 }
             }

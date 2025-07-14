@@ -7,7 +7,8 @@ import csv
 from io import BytesIO, StringIO
 # PDF functionality temporarily disabled
 import warnings
-from database import init_db, create_user, authenticate_user, get_user_settings, save_user_settings, get_progress, save_progress, delete_progress_item, reset_progress, get_user_stats
+from database import init_db, create_user, authenticate_user, get_user_settings, save_user_settings, get_progress, save_progress, delete_progress_item, reset_progress, get_user_stats, get_current_session_id
+import uuid
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'fallback-secret-key-change-in-production')
@@ -111,6 +112,8 @@ def start_game():
     session['selected_characters'] = selected_characters
     session['quiz_direction'] = direction
     session['num_chars'] = num_chars
+    session['session_id'] = str(uuid.uuid4())
+    session['question_start_time'] = None
     
     return get_next_character()
 
@@ -127,6 +130,9 @@ def get_next_character():
         return jsonify({'no_more_characters': True})
     
     char_number, char, meaning = next((n, c, m) for n, c, m in available_characters if c == selected)
+    
+    import time
+    session['question_start_time'] = int(time.time() * 1000)
     
     return jsonify({
         'char_number': char_number,
@@ -146,11 +152,17 @@ def answer():
     
     username = session['username']
     direction = session.get('quiz_direction')
+    session_id = session.get('session_id')
+    start_time = session.get('question_start_time', 0)
+    
+    import time
+    answer_time = int(time.time() * 1000) - start_time if start_time else 0
+    
     selected_characters = session.get('selected_characters', {})
     selected_characters[character] = 1 if is_correct else 0
     session['selected_characters'] = selected_characters
     
-    save_progress(username, character, direction, 1 if is_correct else 0)
+    save_progress(username, character, direction, 1 if is_correct else 0, answer_time, session_id)
     
     return jsonify({'success': True, 'character': character})
 
@@ -268,7 +280,14 @@ def api_stats():
         return jsonify({'error': 'Not authenticated'}), 401
     
     username = session['username']
-    stats = get_user_stats(username)
+    direction = request.args.get('direction')
+    session_id = request.args.get('session_id')
+    
+    # Get current session if requested
+    if session_id == 'current':
+        session_id = session.get('session_id')
+    
+    stats = get_user_stats(username, direction, session_id)
     return jsonify(stats)
 
 if __name__ == '__main__':
