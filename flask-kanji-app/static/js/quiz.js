@@ -1,6 +1,7 @@
 class KanjiQuiz {
     constructor() {
         this.currentCharacter = null;
+        this.lastAnsweredCharacter = null;
         this.gameStarted = false;
         this.init();
     }
@@ -14,7 +15,19 @@ class KanjiQuiz {
         document.getElementById('startGame').addEventListener('click', () => this.startGame());
         document.getElementById('correctBtn').addEventListener('click', () => this.answerQuestion(true));
         document.getElementById('incorrectBtn').addEventListener('click', () => this.answerQuestion(false));
+        document.getElementById('undoBtn').addEventListener('click', () => this.undoLastAnswer());
         document.getElementById('resetBtn').addEventListener('click', () => this.resetProgress());
+        this.loadUserSettings();
+    }
+
+    async loadUserSettings() {
+        try {
+            const response = await fetch('/get_user_settings');
+            const data = await response.json();
+            document.getElementById('numChars').value = data.saved_num_chars;
+        } catch (error) {
+            console.error('Error loading user settings:', error);
+        }
     }
 
     async startGame() {
@@ -106,6 +119,9 @@ class KanjiQuiz {
             });
 
             if (response.ok) {
+                const data = await response.json();
+                this.lastAnsweredCharacter = data.character;
+                document.getElementById('undoBtn').style.display = 'block';
                 this.updateProgress();
                 setTimeout(() => {
                     this.getNextCharacter();
@@ -173,6 +189,32 @@ class KanjiQuiz {
         } finally {
             resetBtn.disabled = false;
             resetBtn.innerHTML = '<i class="fas fa-redo"></i> Reset Progress';
+        }
+    }
+
+    async undoLastAnswer() {
+        if (!this.lastAnsweredCharacter) return;
+
+        const undoBtn = document.getElementById('undoBtn');
+        undoBtn.disabled = true;
+
+        try {
+            const response = await fetch('/undo_answer', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({character: this.lastAnsweredCharacter})
+            });
+
+            if (response.ok) {
+                showAlert('Last answer undone!', 'info');
+                this.lastAnsweredCharacter = null;
+                undoBtn.style.display = 'none';
+                this.updateProgress();
+            }
+        } catch (error) {
+            showAlert('Error undoing answer', 'danger');
+        } finally {
+            undoBtn.disabled = false;
         }
     }
 

@@ -5,10 +5,7 @@ import os
 import re
 import csv
 from io import BytesIO, StringIO
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+# PDF functionality temporarily disabled
 import warnings
 
 app = Flask(__name__)
@@ -133,10 +130,13 @@ def start_game():
         return jsonify({'error': 'Not authenticated'}), 401
     
     data = request.get_json()
-    num_chars = data.get('num_chars', 2200)
+    username = session['username']
+    
+    # Load saved num_chars or use provided/default
+    saved_num_chars = load_num_rounds(username)
+    num_chars = data.get('num_chars', saved_num_chars or 2200)
     direction = data.get('direction', 'Japanese → English')
     
-    username = session['username']
     save_num_rounds(num_chars, username)
     
     available_characters = load_numbers_from_file(TXT_FILE_PATH, num_chars)
@@ -186,7 +186,7 @@ def answer():
     
     save_selected_characters(session.get('quiz_direction'), selected_characters, username)
     
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'character': character})
 
 @app.route('/get_progress')
 def get_progress():
@@ -215,6 +215,38 @@ def get_progress():
         'incorrect_characters': incorrect_characters
     })
 
+@app.route('/undo_answer', methods=['POST'])
+def undo_answer():
+    if 'username' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    data = request.get_json()
+    character = data.get('character')
+    
+    username = session['username']
+    selected_characters = session.get('selected_characters', {})
+    
+    if character in selected_characters:
+        del selected_characters[character]
+        session['selected_characters'] = selected_characters
+        save_selected_characters(session.get('quiz_direction'), selected_characters, username)
+        return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'message': 'Character not found'})
+
+@app.route('/get_user_settings')
+def get_user_settings():
+    if 'username' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    username = session['username']
+    saved_num_chars = load_num_rounds(username)
+    
+    return jsonify({
+        'username': username,
+        'saved_num_chars': saved_num_chars or 2200
+    })
+
 @app.route('/reset_progress', methods=['POST'])
 def reset_progress():
     if 'username' not in session:
@@ -225,9 +257,6 @@ def reset_progress():
     
     session['selected_characters'] = {}
     save_selected_characters(direction, {}, username)
-    
-    if os.path.exists(f"{username}-{NUM_ROUNDS_FILE}"):
-        os.remove(f"{username}-{NUM_ROUNDS_FILE}")
     
     return jsonify({'success': True})
 
@@ -256,32 +285,7 @@ def download_csv():
 
 @app.route('/download_pdf')
 def download_pdf():
-    if 'username' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    available_characters = session.get('available_characters', [])
-    selected_characters = session.get('selected_characters', {})
-    username = session['username']
-    
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
-    pdf.setFont("Helvetica", 14)
-    pdf.drawString(100, 750, "Japanese Characters and Meanings")
-    
-    y_position = 720
-    for char_number, char, meaning in available_characters:
-        if char in selected_characters:
-            status = "Correct" if selected_characters[char] == 1 else "Incorrect"
-            pdf.drawString(100, y_position, f"({int(char_number):6}) {char:<6}: {meaning:<50} - {status}")
-            y_position -= 20
-            if y_position < 40:
-                pdf.showPage()
-                y_position = 750
-    
-    pdf.save()
-    buffer.seek(0)
-    
-    return send_file(buffer, as_attachment=True, download_name=f"{username}-japanese_characters.pdf", mimetype="application/pdf")
+    return jsonify({'error': 'PDF download temporarily disabled'}), 503
 
 if __name__ == '__main__':
     import os
